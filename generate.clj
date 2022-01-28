@@ -23,8 +23,7 @@
 (def max-sun-teeth (- max-gear-teeth (* 2 min-gear-teeth)))
 (def max-planet-teeth (int (Math/floor (/ (- max-gear-teeth min-gear-teeth) 2))))
 (def min-ring-inner-teeth (* 3 min-gear-teeth))
-(def min-ring-diameter-diff 12)
-#_(def min-driver-to-ring-distance (/ (+ min-ring-outer-diameter min-gear-diameter) 2))
+(def min-ring-diameter-diff 15)
 
 (def max-r4-teeth 20)
 
@@ -45,16 +44,22 @@
       (eduction
        (mapcat (fn [driver-teeth]
                  (let [next-ring-teeth (get-in prospect [next-ep-key :ring :outer-teeth])
+                       ;; the next ring's rotations are recorded relative to the next epicycle's sun,
+                       ;; or if you prefer, to this epicycle's carrier (they are attached and rotate in unison)
                        next-ring-rotations (get-in prospect [next-ep-key :ring :rotations])
                        ;; remember that this is the _total_ number of driver rotations,
-                       ;; over all of the carrier rotations, measured in the frame of the carrier
-                       driver-rotations (- (/ (* next-ring-teeth
+                       ;; over all of the carrier rotations, measured in the frame this epicycle's sun.
+                       ;; this is also equal to the total number of planet-rotations in the fixed-sun frame.
+                       driver-rotations (- this-carrier-rotations
+                                           prev-carrier-rotations
+                                           (/ (* next-ring-teeth
                                                  next-ring-rotations)
                                               driver-teeth))
-                       planet-rotations (+ driver-rotations carrier-rotations-to-sun)
-                       ;; planet rotations = (sun teeth / planet teeth) * carrier rotations around a fixed sun
+                       planet-rotations-per-carrier-rotation (/ driver-rotations
+                                                                carrier-rotations-to-sun)
+                       ;; planet rotations = ((sun teeth / planet teeth) + 1) * carrier rotations around a fixed sun
                        sun-planet-teeth-ratio (clojure.lang.Numbers/toRatio
-                                               (/ planet-rotations carrier-rotations-to-sun))
+                                               (- planet-rotations-per-carrier-rotation 1))
                        sun-teeth-step (numerator sun-planet-teeth-ratio)
                        planet-teeth-step (denominator sun-planet-teeth-ratio)]
                    (when (and (<= sun-teeth-step max-sun-teeth)
@@ -65,10 +70,11 @@
                            {:teeth driver-teeth
                             :diameter (* driver-teeth module)
                             :carrier-rotations-to-sun carrier-rotations-to-sun
-                            :rotations driver-rotations})
+                            :rotations-to-sun driver-rotations})
                           (assoc-in
                            [ep-key :planets]
-                           {:rotations planet-rotations
+                           {:rotations driver-rotations
+                            :rotations-per-carrier-rotation planet-rotations-per-carrier-rotation
                             :teeth-step planet-teeth-step})
                           (assoc-in
                            [ep-key :sun]
@@ -90,10 +96,14 @@
                        driver-rotations (/ (* next-ring-teeth
                                               next-ring-rotations)
                                            driver-teeth)
-                       planet-rotations (+ driver-rotations this-carrier-rotations)
-                       ;; planet rotations = ((ring teeth / planet teeth) - 1) * -carrier rotations with a fixed ring
+                       ;; same as total driver rotations, but adjusted to be in the frame of the ring
+                       planet-rotations-total (+ driver-rotations this-carrier-rotations)
+                       planet-rotations-per-carrier-rotation (/ planet-rotations-total
+                                                                this-carrier-rotations)
+                       ;; planet rotations = -((ring teeth / planet teeth) - 1) * -carrier rotations
+                       ;; with a fixed ring
                        ring-planet-teeth-ratio (clojure.lang.Numbers/toRatio
-                                                (+ 1 (/ planet-rotations (- this-carrier-rotations))))
+                                                (- 1 planet-rotations-per-carrier-rotation))
                        ring-inner-teeth-step (numerator ring-planet-teeth-ratio)
                        planet-teeth-step (denominator ring-planet-teeth-ratio)]
                    (when (and (<= ring-inner-teeth-step max-gear-teeth)
@@ -106,7 +116,7 @@
                             :rotations driver-rotations})
                           (assoc-in
                            [ep-key :planets]
-                           {:rotations planet-rotations
+                           {:rotations planet-rotations-total
                             :teeth-step planet-teeth-step})
                           (assoc-in
                            [ep-key :ring]
@@ -150,7 +160,7 @@
    (mapcat (fn [factor]
              (when (= (mod number-of-teeth factor) 0)
                [factor])))
-   [2 3 4 5 6]))
+   [3 4]))
 
 (defn acceptable-numbers-of-planets
   [sun-teeth ring-teeth]
@@ -371,7 +381,7 @@
    (map (max-idler-prospect :ep1))
    (mapcat (outer-ring-prospects-fixed-ring :ep1))))
 
-(defn tx-count
+(defn tf-count
   [rf]
   (let [n (java.util.concurrent.atomic.AtomicLong.)]
     (fn
@@ -401,7 +411,7 @@
                                (fn [prospect] (-> prospect :ep3 :driver :teeth))
                                (fn [prospect] (-> prospect :ep3 :driver :rotations))))
               #_(map (fn [prospect] (-> prospect :ep2 :sun)))
-              #_tx-count)
+              #_tf-count)
         conj))
 )
 
@@ -415,6 +425,4 @@
                      (filter (fn [prospect] (= (-> prospect :ep1 :ring :inner-teeth) 180)))))
   (count narrowed)
   (take 2 (data/diff (nth narrowed 0) (nth narrowed 1)))
-  (nth choices 13) ; is pretty good, has a perfectly aligned ep1-to-ep2 ring
-  (nth choices 14) ; pretty interesting -- has a smaller ep3, but ep2's driver is bigger than its ring. I think it could also have a 30-tooth idler
 )
