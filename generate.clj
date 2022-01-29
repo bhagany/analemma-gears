@@ -381,14 +381,6 @@
    (map (max-idler-prospect :ep1))
    (mapcat (outer-ring-prospects-fixed-ring :ep1))))
 
-(defn tf-count
-  [rf]
-  (let [n (java.util.concurrent.atomic.AtomicLong.)]
-    (fn
-      ([] (rf))
-      ([acc] (rf (unreduced (rf acc (.get n)))))
-      ([acc _] (.incrementAndGet n) acc))))
-
 (defn epicycle4-teeth-range []  (range min-gear-teeth (inc max-r4-teeth)))
 (defn generate-choices []
   (->> (epicycle4-teeth-range)
@@ -396,22 +388,7 @@
         (comp (epicycle4-prospects)
               (epicycle3-prospects)
               (epicycle2-prospects)
-              (epicycle1-prospects)
-              #_(filter (fn [prospect] (= (-> prospect :ep1 :ring :inner-teeth) 180)))
-              #_(filter (fn [prospect] (= (-> prospect :ep1 :sun :input-rotations) 4)))
-              #_(remove (fn [prospect] (< (-> prospect :ep1 :idler :teeth) 20)))
-              #_(remove (fn [prospect] (= (-> prospect :ep1 :planets :teeth) 18)))
-              #_(remove (fn [prospect] (= (-> prospect :ep2 :sun :teeth) 18)))
-              #_(remove (fn [prospect] (< (-> prospect :ep4 :ring :outer-teeth) 20)))
-              #_(sort-by (juxt (fn [prospect] (-> prospect :ep1 :driver :teeth))
-                               (fn [prospect] (-> prospect :ep1 :driver :rotations))
-                               (fn [prospect] (-> prospect :ep3 :ring :outer-teeth))
-                               (fn [prospect] (-> prospect :ep2 :driver :teeth))
-                               (fn [prospect] (-> prospect :ep2 :driver :rotations))
-                               (fn [prospect] (-> prospect :ep3 :driver :teeth))
-                               (fn [prospect] (-> prospect :ep3 :driver :rotations))))
-              #_(map (fn [prospect] (-> prospect :ep2 :sun)))
-              #_tf-count)
+              (epicycle1-prospects))
         conj))
 )
 
